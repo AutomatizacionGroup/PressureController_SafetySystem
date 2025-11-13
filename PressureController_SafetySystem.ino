@@ -1851,21 +1851,30 @@ void loadConfig() {
     }
   #endif
 
-  // Mostrar configuracion cargada
-  Serial.print("Config: Min=");
+  // Mostrar configuracion cargada con separador visible
+  Serial.println("\n╔════════════════════════════════════════╗");
+  Serial.println("║     CONFIGURACION ACTUAL CARGADA      ║");
+  Serial.println("╠════════════════════════════════════════╣");
+  Serial.print("║ Min Presion: ");
   Serial.print(config.pressMin);
-  Serial.print(" Max=");
+  Serial.println(" psi");
+  Serial.print("║ Max Presion: ");
   Serial.print(config.pressMax);
-  Serial.print(" SP=");
+  Serial.println(" psi");
+  Serial.print("║ Setpoint:    ");
   Serial.print(config.setpoint);
-  Serial.print(" DB=");
+  Serial.println(" psi");
+  Serial.print("║ Deadband:    ");
   Serial.print(config.deadband);
-  Serial.print(" MinTime=");
+  Serial.println(" psi");
+  Serial.print("║ Tiempo Min:  ");
   Serial.print(config.minOnTime);
-  Serial.print("s | Valve=");
-  Serial.print(config.valveImplemented ? "SI" : "NO");
-  Serial.print(" | Tank=");
-  Serial.println(config.tankSensorImplemented ? "SI" : "NO");
+  Serial.println(" seg");
+  Serial.print("║ Valvula:     ");
+  Serial.println(config.valveImplemented ? "IMPLEMENTADA ✓" : "NO IMPLEMENTADA");
+  Serial.print("║ Tank Sensor: ");
+  Serial.println(config.tankSensorImplemented ? "IMPLEMENTADO ✓" : "NO IMPLEMENTADO");
+  Serial.println("╚════════════════════════════════════════╝\n");
 
   // Resetear tracking de falla de valvula
   resetValveTracking();
