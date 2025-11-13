@@ -78,11 +78,15 @@ PressureController_SafetySystem/
   - Simple state change detection with 100ms debounce
   - Function: `checkTankLevel()` (lines 544-578)
 
-**5. Configuration Persistence**
+**5. Configuration Persistence with Version Control**
 - ESP32: Uses `Preferences` library (key-value store)
 - AVR: Uses `EEPROM` with CRC-8 checksum validation
-- Config struct contains: pressMin/Max, setpoint, deadband, minOnTime, valveImplemented, tankSensorImplemented
-- Save/Load functions: `loadConfig()`, `saveConfig()`, `loadDefaults()`
+- **Version Control**: `#define CONFIG_VERSION 2` detects struct changes automatically
+- Config struct contains: version, pressMin/Max, setpoint, deadband, minOnTime, valveImplemented, tankSensorImplemented, checksum
+- **Auto-Recovery**: If stored version != CONFIG_VERSION, automatically regenerates defaults (handles EEPROM format changes)
+- Save/Load functions: `loadConfig()`, `saveConfig()`, `loadDefaults()`, `clearStoredConfig()`
+- **Critical**: When struct Config changes, increment CONFIG_VERSION to prevent data corruption
+- Serial output shows version on load/save (e.g., "Configuracion cargada desde Preferences (v2)")
 
 **6. Menu System with Scroll**
 - 6 menus (0-indexed as menuSelection): Rango (1), Punto ajuste (2), Banda muerta (3), Tiempo min (4), Valvula (5), Sensor tanque (6), SALIR (7)
@@ -166,6 +170,16 @@ else {
 5. Update menu items/icons arrays in `menuListMode()` (increment loop count)
 6. Update `handleShortPress()` menuSelection limit check
 7. Add save logic in `handleMenuNavigation()`
+
+### IMPORTANT: When Modifying Config Struct
+1. **ALWAYS increment `CONFIG_VERSION`** at top of file (e.g., `#define CONFIG_VERSION 3`)
+2. Add new fields to Config struct
+3. Add defaults (e.g., `const bool DEFAULT_NEW_FEATURE = true`)
+4. Update `loadConfig()` to read new fields (both ESP32 Preferences AND AVR EEPROM)
+5. Update `saveConfig()` to write new fields
+6. Update `loadDefaults()` to initialize new fields with defaults
+7. System will auto-detect version mismatch and regenerate defaults (no manual reset needed!)
+8. This prevents data corruption when EEPROM format changes
 
 ### Debugging Sensor Issues
 - Serial output at 115200 baud shows real-time ADC values every 5s
