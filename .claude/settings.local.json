@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(nul)",
+      "Bash(arduino-cli compile:*)",
+      "Bash(arduino-cli cache:*)",
+      "Bash(timeout 30 arduino-cli compile:*)",
+      "Bash(timeout 120 arduino-cli compile:*)",
+      "Bash(git init:*)",
+      "Bash(git config:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
