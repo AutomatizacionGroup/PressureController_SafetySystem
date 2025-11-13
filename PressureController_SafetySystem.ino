@@ -1104,77 +1104,106 @@ void displayOperation() {
   display.setTextSize(1);
   display.print(" psi");
   
-  // Indicador de estado de valvula de entrada (D7) y nivel de tanque (D6)
+  // Indicador de estado compacto - ICONOS GRAFICOS PROFESIONALES
   display.setTextSize(1);
   display.setCursor(0, 30);
 
-  // Valvula
+  // Valvula: dibuja pequeño cilindro con estado
   if (config.valveImplemented) {
+    display.drawRect(1, 25, 4, 8, SSD1306_WHITE);  // cilindro valvula
     if (valveFaultDetected) {
-      display.print("V:ERR");
+      display.drawLine(1, 25, 5, 33, SSD1306_WHITE);  // X = error
+      display.drawLine(5, 25, 1, 33, SSD1306_WHITE);
     } else if (inletValveOpen) {
-      display.print("V:ABT");
+      display.fillRect(1, 25, 4, 8, SSD1306_WHITE);  // lleno = abierta
     } else {
-      display.print("V:OK");
+      display.drawRect(1, 25, 4, 8, SSD1306_WHITE);  // vacio = cerrada
     }
   } else {
-    display.print("V:-");
+    display.drawLine(0, 29, 5, 29, SSD1306_WHITE);  // - = no implementada
   }
 
-  // Tanque (al lado derecho)
-  display.setCursor(70, 30);
-  if (tankLevelLow) {
-    display.print("T:BAJO");
+  // Tanque: dibuja pequeño rectangulo con nivel
+  if (config.tankSensorImplemented) {
+    display.drawRect(11, 25, 5, 8, SSD1306_WHITE);  // tanque
+    if (tankLevelLow) {
+      display.drawLine(11, 25, 16, 33, SSD1306_WHITE);  // X = bajo
+      display.drawLine(16, 25, 11, 33, SSD1306_WHITE);
+    } else {
+      display.fillRect(13, 30, 3, 3, SSD1306_WHITE);  // puntito = ok
+    }
   } else {
-    display.print("T:OK");
+    display.drawLine(10, 29, 15, 29, SSD1306_WHITE);  // - = no implementado
   }
 
-  // Estado de la bomba con indicador visual mejorado
-  if (inletValveOpen) {
-    // Mostrar "INHIBIDA" cuando la valvula esta abierta
-    display.setCursor(100, 30);
-    display.setTextSize(1);
-    display.print("INHIBIDA");
+  // Bomba: dibuja pequeño circulo con estado dinamico
+  display.drawCircle(25, 29, 3, SSD1306_WHITE);  // circulo bomba
+  if (inletValveOpen || pumpBlocked) {
+    display.drawLine(22, 26, 28, 32, SSD1306_WHITE);  // X = bloqueada/inhibida
+    display.drawLine(28, 26, 22, 32, SSD1306_WHITE);
+  } else if (pump == 1) {
+    display.fillCircle(25, 29, 3, SSD1306_WHITE);  // lleno = encendida
+  } else {
+    display.drawCircle(25, 29, 3, SSD1306_WHITE);  // vacio = apagada
+  }
+
+  // Texto compacto de estado (derecha)
+  display.setCursor(35, 30);
+  if (valveFaultDetected) {
+    display.print("V:ERR");
+  } else if (inletValveOpen) {
+    display.print("INHIB");
   } else if (pumpBlocked) {
-    // Mostrar X cuando esta bloqueada
-    display.drawLine(108, 14, 120, 26, SSD1306_WHITE);
-    display.drawLine(108, 26, 120, 14, SSD1306_WHITE);
-    display.setCursor(104, 30);
-    display.setTextSize(1);
-    display.print("BLOCK");
-  } else if(pump == 1) {
-    display.fillCircle(114, 20, 6, SSD1306_WHITE);
-    display.setCursor(108, 30);
-    display.setTextSize(1);
+    display.print("BLK");
+  } else if (pump == 1) {
     display.print("ON");
   } else {
-    display.drawCircle(114, 20, 6, SSD1306_WHITE);
-    display.setCursor(107, 30);
-    display.setTextSize(1);
     display.print("OFF");
   }
+
+  // Indicador complementario (derecha)
+  if (errorRecoveryCount > 0) {
+    // Durante recuperacion, mostrar icono de ciclos buenos
+    display.setCursor(100, 30);
+    display.print("*");
+    display.print(errorRecoveryCount);
+  } else if (pump == 1 && !pumpBlocked) {
+    // Mostrar icono de flujo cuando la bomba esta activa
+    display.setCursor(100, 30);
+    display.drawTriangle(100, 26, 100, 34, 105, 30, SSD1306_WHITE);
+    display.setCursor(110, 30);
+    display.print("act");
+  } else {
+    // Mostrar voltaje del sensor en reposo
+    display.setCursor(100, 30);
+    display.print("V:");
+    display.print(volt_An);
+  }
   
-  // Panel de informacion
+  // Panel de informacion - DISEÑO COMPACTO Y GRAFICO
   display.drawLine(0, 40, 128, 40, SSD1306_WHITE);
-  
-  // Informacion en columnas con estado del sensor
+
+  // Informacion en columnas con estado del sensor (diseño mejorado)
   if (errorRecoveryCount > 0) {
     display.setCursor(0, 44);
-    display.print("Recuperando: ");
+    display.print("RECOVER:");
     display.print(errorRecoveryCount);
     display.print("/");
     display.print(RECOVERY_CYCLES);
   } else {
+    // Abreviaturas ultra-compactas con iconos visuales
     display.setCursor(0, 44);
-    display.print("sp_value:");
+    display.print("SP:");
     display.print(sp_value);
-    
+    display.print("p");
+
     display.setCursor(40, 44);
-    display.print("db_value:");
+    display.print("DB:");
     display.print(db_value);
-    
+    display.print("p");
+
     display.setCursor(80, 44);
-    display.print("T:");
+    display.print("MIN:");
     display.print(T_set);
     display.print("s");
   }
