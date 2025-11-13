@@ -84,7 +84,9 @@ enum SystemMode {
 SystemMode currentMode = MODE_OPERATION;
 
 // Variables de configuracion (guardadas en memoria persistente)
+#define CONFIG_VERSION 2  // Incrementar cuando cambia la estructura Config
 struct Config {
+  byte version;           // Version de estructura (para deteccion de cambios)
   int pressMin;           // Minimo del rango (Menu 1)
   int pressMax;           // Maximo del rango (Menu 1)
   int setpoint;           // Punto de ajuste (Menu 2)
@@ -1804,8 +1806,11 @@ void loadConfig() {
     // ESP32 usa Preferences
     preferences.begin("pressure", false);
 
-    // Verificar si hay datos guardados
-    if (preferences.getBool("saved", false)) {
+    // Verificar si hay datos guardados y version compatible
+    byte storedVersion = preferences.getUChar("version", 0);
+
+    if (preferences.getBool("saved", false) && storedVersion == CONFIG_VERSION) {
+      config.version = CONFIG_VERSION;
       config.pressMin = preferences.getInt("pressMin", DEFAULT_PRESS_MIN);
       config.pressMax = preferences.getInt("pressMax", DEFAULT_PRESS_MAX);
       config.setpoint = preferences.getInt("setpoint", DEFAULT_SETPOINT);
@@ -1813,7 +1818,12 @@ void loadConfig() {
       config.minOnTime = preferences.getInt("minOnTime", DEFAULT_MIN_TIME);
       config.valveImplemented = preferences.getBool("valveImplemented", DEFAULT_VALVE_IMPLEMENTED);
       config.tankSensorImplemented = preferences.getBool("tankSensorImplemented", DEFAULT_TANK_SENSOR_IMPLEMENTED);
-      Serial.println("Configuracion cargada desde Preferences");
+      Serial.println("✓ Configuracion cargada desde Preferences (v" + String(storedVersion) + ")");
+    } else if (preferences.getBool("saved", false) && storedVersion != CONFIG_VERSION) {
+      // Estructura cambio, regenerar defaults
+      loadDefaults();
+      saveConfig();
+      Serial.println("⚠️ Version de estructura cambio, regenerando configuracion por defecto");
     } else {
       // Primera vez, usar valores por defecto
       loadDefaults();
@@ -1823,32 +1833,39 @@ void loadConfig() {
   #else
     // Arduino AVR usa EEPROM
     EEPROM.get(0, config);
-    
-    // Validar checksum
+
+    // Validar version y checksum
     byte calculatedChecksum = calculateChecksum();
-    if (config.checksum != calculatedChecksum) {
+    if (config.version != CONFIG_VERSION) {
+      // Estructura cambio, regenerar defaults
+      loadDefaults();
+      saveConfig();
+      Serial.println("⚠️ Version de estructura cambio (v" + String(config.version) + " -> v" + String(CONFIG_VERSION) + "), regenerando configuracion");
+    } else if (config.checksum != calculatedChecksum) {
       // Datos invalidos, cargar defaults
       loadDefaults();
       saveConfig();
-      Serial.println("Checksum invalido, usando valores por defecto");
+      Serial.println("❌ Checksum invalido, usando valores por defecto");
     } else {
-      Serial.println("Configuracion cargada desde EEPROM");
+      Serial.println("✓ Configuracion cargada desde EEPROM (v" + String(config.version) + ")");
     }
   #endif
-  
+
   // Mostrar configuracion cargada
   Serial.print("Config: Min=");
   Serial.print(config.pressMin);
   Serial.print(" Max=");
   Serial.print(config.pressMax);
-  Serial.print(" sp_value=");
+  Serial.print(" SP=");
   Serial.print(config.setpoint);
-  Serial.print(" db_value=");
+  Serial.print(" DB=");
   Serial.print(config.deadband);
   Serial.print(" MinTime=");
   Serial.print(config.minOnTime);
-  Serial.print(" Valve=");
-  Serial.println(config.valveImplemented ? "SI" : "NO");
+  Serial.print("s | Valve=");
+  Serial.print(config.valveImplemented ? "SI" : "NO");
+  Serial.print(" | Tank=");
+  Serial.println(config.tankSensorImplemented ? "SI" : "NO");
 
   // Resetear tracking de falla de valvula
   resetValveTracking();
@@ -1869,6 +1886,7 @@ void saveConfig() {
     // ESP32 usa Preferences
     preferences.begin("pressure", false);
     preferences.putBool("saved", true);
+    preferences.putUChar("version", CONFIG_VERSION);
     preferences.putInt("pressMin", config.pressMin);
     preferences.putInt("pressMax", config.pressMax);
     preferences.putInt("setpoint", config.setpoint);
@@ -1877,16 +1895,18 @@ void saveConfig() {
     preferences.putBool("valveImplemented", config.valveImplemented);
     preferences.putBool("tankSensorImplemented", config.tankSensorImplemented);
     preferences.end();
-    Serial.println("Configuracion guardada en Preferences");
+    Serial.println("✓ Configuracion guardada en Preferences (v" + String(CONFIG_VERSION) + ")");
   #else
     // Arduino AVR usa EEPROM
+    config.version = CONFIG_VERSION;
     config.checksum = calculateChecksum();
     EEPROM.put(0, config);
-    Serial.println("Configuracion guardada en EEPROM");
+    Serial.println("✓ Configuracion guardada en EEPROM (v" + String(CONFIG_VERSION) + ")");
   #endif
 }
 
 void loadDefaults() {
+  config.version = CONFIG_VERSION;
   config.pressMin = DEFAULT_PRESS_MIN;
   config.pressMax = DEFAULT_PRESS_MAX;
   config.setpoint = DEFAULT_SETPOINT;
@@ -1915,4 +1935,24 @@ byte calculateChecksum() {
     }
   }
   return crc;
+}
+
+void clearStoredConfig() {
+  // Limpiar configuracion guardada (factory reset)
+  #ifdef ESP32
+    preferences.begin("pressure", false);
+    preferences.clear();
+    preferences.end();
+    Serial.println("✓ Memoria Preferences limpiada (factory reset)");
+  #else
+    // Limpiar EEPROM
+    for (int i = 0; i < sizeof(config); i++) {
+      EEPROM.write(i, 0xFF);
+    }
+    Serial.println("✓ Memoria EEPROM limpiada (factory reset)");
+  #endif
+
+  // Cargar defaults
+  loadDefaults();
+  Serial.println("✓ Configuracion reseteada a valores de fabrica");
 }
