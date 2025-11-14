@@ -1318,6 +1318,123 @@ void menuConfigMode() {
   display.display();
 }
 
+// ========== MENU CONFIGURATION STRUCTURE (REFACTORIZACIÓN v3.2) ==========
+
+typedef struct {
+  const char* title;        // Titulo del menu
+  const char* label;        // Label del parametro
+  const char* unit;         // Unidad (psi, seg, etc)
+  int* value;               // Puntero al valor en config_temp
+  int minVal;               // Minimo valor permitido
+  int maxVal;               // Maximo valor permitido
+  int step;                 // Paso del encoder (1 o 5)
+  int displayMax;           // Maximo para barra de progreso (si aplica)
+  bool isBoolean;           // Si es bool (SI/NO) en lugar de número
+  bool showProgressBar;     // Si mostrar barra de progreso
+} MenuConfig;
+
+// Tabla de configuracion de TODOS los menus (elimina 362 lineas de duplicacion)
+MenuConfig menuConfigs[] = {
+  // MENU 1 es especial: 2 parametros, se maneja en displayMenu1()
+  {NULL, NULL, NULL, NULL, 0, 0, 0, 0, false, false},
+
+  // MENU 2: Setpoint
+  {"PUNTO DE AJUSTE", "Setpoint", "psi", &config_temp.setpoint, 10, 100, 1, 100, false, true},
+
+  // MENU 3: Deadband
+  {"BANDA MUERTA", "Deadband", "psi", &config_temp.deadband, 5, 40, 1, 40, false, false},
+
+  // MENU 4: Min On Time
+  {"TIEMPO MINIMO", "Tiempo Min", "seg", &config_temp.minOnTime, 1, 10, 1, 10, false, false},
+
+  // MENU 5: Valve Implemented (Boolean)
+  {"VALVULA DE ENTRADA", "Implementada", "", &(int&)config_temp.valveImplemented, 0, 1, 1, 1, true, false},
+
+  // MENU 6: Tank Sensor (Boolean)
+  {"SENSOR TANQUE", "Implementado", "", &(int&)config_temp.tankSensorImplemented, 0, 1, 1, 1, true, false},
+};
+
+// Funcion generica para menus con 1 parametro numerico o boolean
+void displayMenuGeneric(int menuId) {
+  MenuConfig cfg = menuConfigs[menuId];
+
+  drawHeader(cfg.title);
+
+  if (!editingValue) {
+    // ===== MODO VIS UALIZACION =====
+    display.setCursor(20, 20);
+    display.print(cfg.label);
+    display.print(":");
+
+    // Mostrar valor
+    display.setTextSize(2);
+    display.setCursor(40, 32);
+
+    if (cfg.isBoolean) {
+      display.print(*cfg.value ? "SI" : "NO");
+    } else {
+      display.print(*cfg.value);
+    }
+
+    display.setTextSize(1);
+    if (strlen(cfg.unit) > 0) {
+      display.print(" ");
+      display.print(cfg.unit);
+    }
+
+    // Barra visual si aplica
+    if (cfg.showProgressBar && !cfg.isBoolean) {
+      drawProgressBar(10, 48, 108, 6, *cfg.value, cfg.minVal, cfg.displayMax);
+    }
+
+    drawFooter("[OK] Editar  [HOLD] Menu");
+  } else {
+    // ===== MODO EDICION =====
+    display.setCursor(20, 16);
+    display.print("Nuevo ");
+    display.println(cfg.label);
+
+    // Recuadro con valor editandose
+    display.fillRect(30, 28, 68, 18, SSD1306_WHITE);
+    display.setTextColor(SSD1306_BLACK);
+    display.setTextSize(2);
+    display.setCursor(38, 30);
+
+    if (cfg.isBoolean) {
+      display.print(*cfg.value ? "SI" : "NO");
+    } else {
+      display.print(*cfg.value);
+    }
+
+    display.setTextColor(SSD1306_WHITE);
+    display.setTextSize(1);
+
+    if (strlen(cfg.unit) > 0) {
+      display.setCursor(92, 34);
+      display.print(cfg.unit);
+    }
+
+    // Ajustar con encoder
+    if (encoderPos != lastEncoderPos) {
+      int delta = (encoderPos > lastEncoderPos) ? cfg.step : -cfg.step;
+      *cfg.value += delta;
+
+      // Clampear al rango valido
+      if (*cfg.value < cfg.minVal) *cfg.value = cfg.minVal;
+      if (*cfg.value > cfg.maxVal) *cfg.value = cfg.maxVal;
+
+      lastEncoderPos = encoderPos;
+    }
+
+    // Barra visual si aplica
+    if (cfg.showProgressBar && !cfg.isBoolean) {
+      drawProgressBar(10, 48, 108, 6, *cfg.value, cfg.minVal, cfg.displayMax);
+    }
+
+    drawFooter("[OK] Guardar");
+  }
+}
+
 void displayMenu1() {
   // Menu 1: Rango de entrada con diseño mejorado
   drawHeader("RANGO DE ENTRADA");
@@ -1398,166 +1515,18 @@ void displayMenu1() {
 }
 
 void displayMenu2() {
-  // Menu 2: Punto de ajuste con diseño mejorado
-  drawHeader("PUNTO DE AJUSTE");
-  
-  if (!editingValue) {
-    // Visualizacion del setpoint
-    display.setCursor(20, 20);
-    display.print("Setpoint actual:");
-    
-    // Valor grande centrado
-    display.setTextSize(2);
-    display.setCursor(45, 32);
-    display.print(config_temp.setpoint);
-    display.setTextSize(1);
-    display.print(" psi");
-    
-    // Barra visual del setpoint
-    drawProgressBar(10, 48, 108, 6, config_temp.setpoint, 10, 100);
-    
-    drawFooter("[OK] Editar  [HOLD] Menu");
-  } else {
-    // Modo edicion
-    display.setCursor(20, 16);
-    display.print("Nuevo setpoint:");
-    
-    // Valor editandose con animacion
-    display.fillRect(38, 28, 52, 18, SSD1306_WHITE);
-    display.setTextColor(SSD1306_BLACK);
-    display.setTextSize(2);
-    display.setCursor(45, 30);
-    display.print(config_temp.setpoint);
-    display.setTextColor(SSD1306_WHITE);
-    display.setTextSize(1);
-    display.setCursor(92, 34);
-    display.print("psi");
-    
-    // Ajustar con encoder
-    if (encoderPos != lastEncoderPos) {
-      config_temp.setpoint += (encoderPos > lastEncoderPos) ? 1 : -1;
-      if (config_temp.setpoint < 10) config_temp.setpoint = 10;
-      if (config_temp.setpoint > 100) config_temp.setpoint = 100;
-      lastEncoderPos = encoderPos;
-    }
-    
-    // Barra visual actualizada
-    drawProgressBar(10, 48, 108, 6, config_temp.setpoint, 10, 100);
-    
-    drawFooter("[OK] Guardar");
-  }
+  // Menu 2: Usa funcion generica (refactorizacion v3.2)
+  displayMenuGeneric(2);
 }
 
 void displayMenu3() {
-  // Menu 3: Banda muerta con visualizacion grafica
-  drawHeader("BANDA MUERTA");
-  
-  if (!editingValue) {
-    display.setCursor(20, 20);
-    display.print("Deadband actual:");
-    
-    // Valor grande
-    display.setTextSize(2);
-    display.setCursor(45, 32);
-    display.print(config_temp.deadband);
-    display.setTextSize(1);
-    display.print(" psi");
-    
-    // Visualizacion grafica del deadband
-    int centerX = 64;
-    int dbWidth = map(config_temp.deadband, 5, 40, 10, 60);
-    display.drawRect(centerX - dbWidth/2, 48, dbWidth, 6, SSD1306_WHITE);
-    display.drawLine(centerX, 46, centerX, 56, SSD1306_WHITE); // Centro
-    
-    drawFooter("[OK] Editar  [HOLD] Menu");
-  } else {
-    display.setCursor(20, 16);
-    display.print("Nuevo deadband:");
-    
-    // Valor editandose
-    display.fillRect(38, 28, 52, 18, SSD1306_WHITE);
-    display.setTextColor(SSD1306_BLACK);
-    display.setTextSize(2);
-    display.setCursor(45, 30);
-    display.print(config_temp.deadband);
-    display.setTextColor(SSD1306_WHITE);
-    display.setTextSize(1);
-    display.setCursor(92, 34);
-    display.print("psi");
-    
-    // Ajustar con encoder
-    if (encoderPos != lastEncoderPos) {
-      config_temp.deadband += (encoderPos > lastEncoderPos) ? 1 : -1;
-      if (config_temp.deadband < 5) config_temp.deadband = 5;
-      if (config_temp.deadband > 40) config_temp.deadband = 40;
-      lastEncoderPos = encoderPos;
-    }
-    
-    // Visualizacion grafica actualizada
-    int centerX = 64;
-    int dbWidth = map(config_temp.deadband, 5, 40, 10, 60);
-    display.drawRect(centerX - dbWidth/2, 48, dbWidth, 6, SSD1306_WHITE);
-    display.drawLine(centerX, 46, centerX, 56, SSD1306_WHITE);
-    
-    drawFooter("[OK] Guardar");
-  }
+  // Menu 3: Usa funcion generica (refactorizacion v3.2)
+  displayMenuGeneric(3);
 }
 
 void displayMenu4() {
-  // Menu 4: Tiempo minimo ON con indicador visual
-  drawHeader("TIEMPO MINIMO ON");
-  
-  if (!editingValue) {
-    display.setCursor(15, 20);
-    display.print("Tiempo actual:");
-    
-    // Valor grande
-    display.setTextSize(2);
-    display.setCursor(40, 32);
-    display.print(config_temp.minOnTime);
-    display.setTextSize(1);
-    display.print(" seg");
-    
-    // Indicador de tiempo con segmentos
-    int segments = config_temp.minOnTime;
-    int segWidth = 10;
-    for(int i = 0; i < segments && i < 10; i++) {
-      display.fillRect(14 + (i * 11), 48, segWidth, 6, SSD1306_WHITE);
-    }
-    
-    drawFooter("[OK] Editar  [HOLD] Menu");
-  } else {
-    display.setCursor(15, 16);
-    display.print("Nuevo tiempo:");
-    
-    // Valor editandose
-    display.fillRect(38, 28, 52, 18, SSD1306_WHITE);
-    display.setTextColor(SSD1306_BLACK);
-    display.setTextSize(2);
-    display.setCursor(45, 30);
-    display.print(config_temp.minOnTime);
-    display.setTextColor(SSD1306_WHITE);
-    display.setTextSize(1);
-    display.setCursor(85, 34);
-    display.print("seg");
-    
-    // Ajustar con encoder
-    if (encoderPos != lastEncoderPos) {
-      config_temp.minOnTime += (encoderPos > lastEncoderPos) ? 1 : -1;
-      if (config_temp.minOnTime < 1) config_temp.minOnTime = 1;
-      if (config_temp.minOnTime > 10) config_temp.minOnTime = 10;
-      lastEncoderPos = encoderPos;
-    }
-    
-    // Indicador actualizado
-    int segments = config_temp.minOnTime;
-    int segWidth = 10;
-    for(int i = 0; i < segments && i < 10; i++) {
-      display.fillRect(14 + (i * 11), 48, segWidth, 6, SSD1306_WHITE);
-    }
-    
-    drawFooter("[OK] Guardar");
-  }
+  // Menu 4: Usa funcion generica (refactorizacion v3.2)
+  displayMenuGeneric(4);
 }
 
 bool validateConfig(Config& cfg) {
@@ -1582,135 +1551,13 @@ bool validateConfig(Config& cfg) {
 }
 
 void displayMenu5() {
-  // Menu 5: Valvula de entrada implementada (Si/No)
-  drawHeader("VALVULA DE ENTRADA");
-
-  if (!editingValue) {
-    display.setCursor(15, 20);
-    display.print("¿Valvula");
-    display.setCursor(15, 30);
-    display.print("implementada?");
-
-    // Mostrar estado actual
-    display.setTextSize(2);
-    if (config_temp.valveImplemented) {
-      display.setCursor(30, 42);
-      display.print("SI");
-    } else {
-      display.setCursor(25, 42);
-      display.print("NO");
-    }
-    display.setTextSize(1);
-
-    drawFooter("[OK] Editar  [HOLD] Menu");
-  } else {
-    // Modo edicion
-    display.setCursor(15, 16);
-    display.print("Selecciona opcion:");
-
-    // Mostrar opciones
-    int y1 = 32;
-    int y2 = 46;
-
-    if (config_temp.valveImplemented) {
-      // SI esta seleccionado
-      display.fillRect(20, y1 - 2, 30, 12, SSD1306_WHITE);
-      display.setTextColor(SSD1306_BLACK);
-      display.setCursor(28, y1);
-      display.setTextSize(1);
-      display.print("SI");
-      display.setTextColor(SSD1306_WHITE);
-
-      display.drawRect(20, y2 - 2, 30, 12, SSD1306_WHITE);
-      display.setCursor(26, y2);
-      display.print("NO");
-    } else {
-      // NO esta seleccionado
-      display.drawRect(20, y1 - 2, 30, 12, SSD1306_WHITE);
-      display.setCursor(28, y1);
-      display.print("SI");
-
-      display.fillRect(20, y2 - 2, 30, 12, SSD1306_WHITE);
-      display.setTextColor(SSD1306_BLACK);
-      display.setCursor(26, y2);
-      display.print("NO");
-      display.setTextColor(SSD1306_WHITE);
-    }
-
-    // Ajustar con encoder
-    if (encoderPos != lastEncoderPos) {
-      config_temp.valveImplemented = !config_temp.valveImplemented;  // Alternar
-      lastEncoderPos = encoderPos;
-    }
-
-    drawFooter("[OK] Guardar");
-  }
+  // Menu 5: Usa funcion generica (refactorizacion v3.2)
+  displayMenuGeneric(5);
 }
 
 void displayMenu6() {
-  // Menu 6: Sensor de bajo nivel de tanque implementado (Si/No)
-  drawHeader("SENSOR TANQUE BAJO");
-
-  if (!editingValue) {
-    display.setCursor(10, 20);
-    display.print("¿Sensor tanque");
-    display.setCursor(10, 30);
-    display.print("implementado?");
-
-    // Mostrar estado actual
-    display.setTextSize(2);
-    if (config_temp.tankSensorImplemented) {
-      display.setCursor(30, 42);
-      display.print("SI");
-    } else {
-      display.setCursor(25, 42);
-      display.print("NO");
-    }
-    display.setTextSize(1);
-
-    drawFooter("[OK] Editar  [HOLD] Menu");
-  } else {
-    // Modo edicion
-    display.setCursor(15, 16);
-    display.print("Selecciona opcion:");
-
-    // Mostrar opciones
-    int y1 = 32;
-    int y2 = 46;
-
-    if (config_temp.tankSensorImplemented) {
-      // SI esta seleccionado
-      display.fillRect(20, y1 - 2, 30, 12, SSD1306_WHITE);
-      display.setTextColor(SSD1306_BLACK);
-      display.setCursor(28, y1);
-      display.setTextSize(1);
-      display.print("SI");
-      display.setTextColor(SSD1306_WHITE);
-
-      display.drawRect(20, y2 - 2, 30, 12, SSD1306_WHITE);
-      display.setCursor(26, y2);
-      display.print("NO");
-    } else {
-      // NO esta seleccionado
-      display.drawRect(20, y1 - 2, 30, 12, SSD1306_WHITE);
-      display.setCursor(28, y1);
-      display.print("SI");
-
-      display.fillRect(20, y2 - 2, 30, 12, SSD1306_WHITE);
-      display.setTextColor(SSD1306_BLACK);
-      display.setCursor(26, y2);
-      display.print("NO");
-      display.setTextColor(SSD1306_WHITE);
-    }
-
-    // Ajustar con encoder
-    if (encoderPos != lastEncoderPos) {
-      config_temp.tankSensorImplemented = !config_temp.tankSensorImplemented;  // Alternar
-      lastEncoderPos = encoderPos;
-    }
-
-    drawFooter("[OK] Guardar");
-  }
+  // Menu 6: Usa funcion generica (refactorizacion v3.2)
+  displayMenuGeneric(6);
 }
 
 void handleMenuNavigation() {
